@@ -11,9 +11,6 @@ implicit none
 include "parameters.par"  ! Declaration of the variables and constants
 
 ! ------------------------- File Operations -------------------------
-! Opening initial files
-open(320, file="stellar_mass.dat")  
-open(430, file="Chamaleon-Disk_DustMass.dat") 
 
 ! Output file below:
  open(330, file="LHS_3154-GaussMstar-Chamaleon.sal")
@@ -30,13 +27,11 @@ do ii=1, nsistems
   mts0=0.0
 
 !We use the mass of the star as a gaussian as the observations
-  read(320,*)mstar
+  mstar=0.1118 !LHS 3154 in solar masses
 
-! For Chamaleon disks we use a log-uniform distribution to obtain the disk mass
-  read(430,*)log_Md_dust !see notes above
-  Md_dust=10.*(10.**(log_Md_dust)) ! In Earth masses (added x10 to test more massive disks)
-  md= Md_dust*Md_ratio*emet/emesol !Gaseous disk mass in Solar masses
-  rc=90. !This parameter can change, gives the mass is distribution in the disk (Miguel et al. 2011a) 
+! In the standard scenario, the disk mass is found as a relation with the stellar mass. 
+!Following Williams & Cieza 2011 this relation is: 
+  md= 0.01*mstar!solar masses
 
 ! the disipation timescale is log-uniform calculated
     y1=dlog10(tau_min)

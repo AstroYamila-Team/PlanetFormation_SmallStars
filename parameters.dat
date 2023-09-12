@@ -27,7 +27,9 @@ real(kind=dp), parameter :: alfa_max=1.e-3, &  !maximum value accepted for the d
     tau_min=1.d6, &                     !minimum value accepted for the disipation timescale
     grilla=0.001, &                     !separation of the grid in AU
     grilla_cm=grilla*uacm, &            !separation of the grid in cm
-    gama=1                              !Disk profile, could be between 0.5 and 1.5, Miguel et al. 2011a 
+    gama=1, &                           !Disk profile, could be between 0.5 and 1.5, Miguel et al. 2011a 
+    rc=90.                              !This parameter can change, gives the mass is distribution in the disk (Miguel et al. 2011a) 
+
 !==================================================================
 !Others
 real(kind=dp), parameter :: b=10.d0, &  !separation between oligarch embryos
