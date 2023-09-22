@@ -1,0 +1,109 @@
+intrinsic sqrt,dlog10,dexp,dsqrt,int    !Intrinsic functions used
+integer, parameter :: dp = selected_real_kind(15, 307)
+
+!==================================================================
+!              Physical constants and Astronomical data
+!==================================================================
+real(kind=dp), parameter ::  &
+emesol=2.d33, &              !Solar mass g
+kb=1.380658d-16, &           !boltzmann constant cgs
+mu=2.3, &                    !molecular weight (solar comp)
+me=1.66d-24, &               !hidrogen mass g
+g=6.672d-8, &                !cm3/g/s2
+emejup=1.899d30, &           !gr
+rearth=6.378d8, &            !Earth radius [cm]
+emet=5.67d27, &              !Earth mass [gr]
+rsun=6.96d10, &              !Solar radius [cm]
+yearsec=365.d0*86400.d0, &   !seconds in one year
+aucm=1.496d13, &             !1 AU in cm
+pi=4.*atan(1.), &
+ctpi=4.18879d0               ! =(4/3)*pi 
+
+!---------------------
+!Simulation parameters
+!---------------------
+integer, parameter :: &
+nsal=0, &                    !espaciado nsal*dt de las salidas
+nsistems=1000.               !number of simulation performed (=number of systems formed)
+
+real(kind=dp), parameter :: &
+tfin=1.d7                   !Final time of the simulation
+
+!==================================================================
+!            Parameters for the grid and disc profiles
+!==================================================================
+integer, parameter :: &
+ngrilla=1000000, &
+MaxSed=100000
+
+real(kind=dp) ::  &
+alfa=1.d-3, &                !alfa de Shakura-Sunyaev alfa=1.d-3 and 1.d-4 
+ro_sat=1.5d0, &              !satellitesimals density
+size_ini=500., &             !embrios initial size km (100km is 6e21g and 1000km is 1e24g)
+sat_disc_size=30., &         !satellitesimals size in km 
+rmax=100.*aucm, &            !outer disc[cm], taken from observations by Daemgen+2016 & Testi+2016
+grillajup=0.001, &           !espaciado de la grilla en AU, spacing for the inner disk (a<10AU)
+grilla=0.001*aucm, &         !espaciado de la grilla en cm, spacing for the inner disk (a<10AU)
+grillajup_out=0.01, &        !espaciado de la grilla en AU, spacing for the outer disk (for a lower resolution outside reduce this for a>10AU)
+grilla_out=0.01*aucm,&       !espaciado de la grilla en cm, spacing for the outer disk (a>10AU)
+sep=1.d0, &                  !when do we separate which grid spacing to use (AU)
+ro_ice=1.5d0, &              !planetesimals density beyond the snow line
+Md_ratio =100., &            !gas/dust for the disk I used 100 and 10
+rc=10., &                    !This parameter can change, is related to the mass is distribution in the disk (Miguel et al. 2011a) 
+tau_max=1.d7, &              !maximum disk time-scale in years
+tau_min=3.d6, &              !minimum disk time-scale in years
+cmigII=0.3d0, &              !variables of the migration subroutines
+constmigI=0.3d0, &           !variables of the migration subroutines
+gama=1.5                     !This can change between 0.5 and 1.5 (Miguel et al. 2011a)
+!==================================================================
+!                    Declaration of variables
+!==================================================================
+integer :: i,tot_sed,ind,cp,lt,n,ii,j,k,in(MaxSed),jj,iii, &
+     l,im,jm1,kk,cps,nonzero,semilla,indgas(MaxSed),im1,index
+
+real(kind=dp) :: a_gr(ngrilla),mtg0,mtg, &
+     tacc1(MaxSed),omega1, &
+     T(ngrilla),algo,mts0,emepla_tot,mts, &
+     b1,r1,r2,a1,a2,sigma_in_0, &
+     sigma_out_0,rmin,av_gr(ngrilla), &
+     superpos,taugas,xx1,xx2,xu,det,c1,x,zai,zaf,Tcal, &
+     emepla(MaxSed),a(MaxSed),erreh(MaxSed), &
+     sigmap(ngrilla),rhill_sum, &
+     emeiso(MaxSed),emedot_crit,dif,emeiso_gas(MaxSed), &
+     emegas(MaxSed),rplanet(MaxSed),eme_core(MaxSed), &
+     RND,acm(MaxSed),time,tk,a_ini(MaxSed),sigma_g(ngrilla), &
+     tau1,emepla_tot_ini, eme_s,dsigma,dm,da,sigma_g_ini(ngrilla),&
+     DSEED,D2A32,sigma_g_0(ngrilla),sigma_s(ngrilla), &
+     sigma_s_0(ngrilla),sigmadp,omega,sigma,dmdt, &
+     tacc,rm,dsigma2,eme_disk,mtsp, &
+     qs,eta,sigmag0,Tcalrm, &
+     sigmad0,fd_p,fg_p,ro_jup,difk(MaxSed),difk_ch,emepla_tot1, &
+     ememe,eme_gap(MaxSed), &
+     coef2,amin,eme_gap1,eme_gap2,taumigI,dadt,sigmagp,emegas_1, &
+     crit_gas(MaxSed),tkh,tasa,sg,tau2,fgp,fsp,eme_sca(MaxSed), &
+     sigmag,cs,tau_migI,rin,rout, &
+     y1,y2,yu,dsigmadt,hm,om,rmcm,&
+     dsigmadt_n(ngrilla),&
+     md,mstar,elestar,&
+     rice,fice,m_iso(ngrilla),&
+     wra,r_min,r_max,eme_min,eme_max,x1,x2,eme_med,loc_seed,&
+     Delta_a,m_iso_1,taucross,ecc(MaxSed),z1,z2,a_med,omegak,&
+     rH,mu_mass,e0,a_func,b_func,taucross_pair(MaxSed),dt,&
+     omega_peri_1,omega_peri_2,omega_peri_col,e_ij,arg,emepla_1,rplanet_1,&
+     omegak_cal,Tk_cal,fz,cuenta,omega_par,tacc2(MaxSed),faktor,ro_0,rogas,tacc3(MaxSed),&
+     w1(MaxSed),w2,r,w_int,w_1,w_2,a_vis_irr,incr,max_mass_fz,Mg_dot_0,tau_fast,ecc_both,md_max_pt,&
+     md_min_pt,factor,emepla_ini_tot,m_iso_ini_tot,m_iso_disk_tot,&
+     em,eme_glob,eme_th,log_Md_dust,Md_dust, &
+     mplanet, tau_migI_2, m_dot_disk,nu
+
+      
+INTEGER idum,IM2,IMM1,IA1,IA2,IQ1,IQ2,IR1,IR2,NTAB,NDIV,nonzeros
+REAL ran2,AM,EPS,RNMX
+PARAMETER (IM1=2147483563,IM2=2147483399,AM=1./IM1,IMM1=IM1-1, &
+     IA1=40014,IA2=40692,IQ1=53668,IQ2=52774,IR1=12211,IR2=3791, &
+     NTAB=32,NDIV=1+IMM1/NTAB,EPS=1.2e-7,RNMX=1.-EPS)
+INTEGER idum2,iv(NTAB),iy,numero
+SAVE iv,iy,idum2
+DATA idum2/123456789/, iv/NTAB*0/, iy/0/
+
+real(kind=dp) :: Mg_dot             !Gas accretion into the star [Msun/yr]. It changes exponentially. 

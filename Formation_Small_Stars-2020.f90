@@ -13,7 +13,7 @@ include "parameters.par"  ! Declaration of the variables and constants
 ! ------------------------- File Operations -------------------------
 
 ! Output file below:
- open(330, file="LHS_3154-GaussMstar-Chamaleon.sal")
+ open(330, file="LHS_3154-formation-1000systems.sal")
 
 !Generacion de los satellites iniciales they semimajor axis is chosen random
 
@@ -54,6 +54,7 @@ do ii=1, nsistems
 !Location of the iceline
 !to get it, I replaced the T for 170K and used the relation between the luminosity and the stellar mass
   rice= 0.075*(mstar/0.1)         !AU new estimation, using Ida+2016 Irr profile.   
+
   mstar=emesol*mstar              !stellar mass in gr
 
 !Calculus of the inner radius following Ormel+2017.
@@ -61,8 +62,7 @@ do ii=1, nsistems
   Mg_dot_0=1.d-10
   Mg_dot=1.d-10 
   rmin= (((180.**4.*(0.5*rsun)**12.)/(4.*g*mstar*(Mg_dot*emesol/yearsec)**2.))**(1./7.)) !cm
-  amin=rmin                 !inner location for the seeds generation ! [cm]
-
+  amin=rmin                 !inner location for the seeds generation ! [cm]        
 !Calculus of the separation radius between viscous and radiative heating regimes (Ida, Guillot, Morby 2016)
   a_vis_irr= 1.8d0 * elestar**(-20.d0/33.) * (mstar/emesol)**(31.d0/33.) * &
                (alfa/1.d-3)**(-14.d0/33.) * (Mg_dot/1.d-8)**(28.d0/33.) ! AU
@@ -136,8 +136,6 @@ do ii=1, nsistems
         endif
     enddo
     Delta_a=10.d0*(m_iso(i)/(3.*mstar))**(1./3.)*a(i)  !au 
-
-  endif
 
 ! calculates the initial water percetentage
     r = ((a(i)-rice)*10.)
@@ -302,7 +300,7 @@ do ii=1, nsistems
 
 ! Now I calculate the limit to gas accretion (it can't be larger than the gas accretion onto the star, Ida+2013)
         nu= alfa*(0.05*a(i)**0.25*acm(i))**2 * &
-            ((g*emestar/acm(i)**3.)**0.5)
+            ((g*mstar/acm(i)**3.)**0.5)
         m_dot_disk= 3.*pi*sigmagp*nu
         m_dot_disk= m_dot_disk/det
         if (tasa*emet > m_dot_disk)tasa = m_dot_disk/emet
@@ -340,7 +338,7 @@ do ii=1, nsistems
 
 !Planetary type I migration
    call migrarI(a,in,det,emepla,acm,elestar,&
-               mstar,sigmag0,time,tot_sed,rmin,a_vis_irr,Mg_dot,dt,gama,rc) 
+               mstar,sigmag0,time,tot_sed,rmin,a_vis_irr,Mg_dot,dt) 
 
 !=======================================================================
 
@@ -348,13 +346,22 @@ do ii=1, nsistems
   rm=10.d0*exp(2.*time/taugas) !AU (Miguel+2011a)
   call migrar(a,rm,in,acm,rplanet,ind,a_gr,elestar, &
               emepla,det,av_gr,sigma_g,time,taugas,sigmag0, &
-              mstar,tot_sed,rmin,a_vis_irr,Mg_dot,dt,gama,rc)
+              mstar,tot_sed,rmin,a_vis_irr,Mg_dot,dt)
 
 !=======================================================================
 1111 continue
 !Resonance trapping
   call resonance_trapping(a,in,acm,emepla,mstar,tot_sed)
 
+!=======================================================================
+!Collisions after gas disipated
+  if (time > taugas)then
+    call collisions(a,in,acm,emepla,mstar,tot_sed,taucross,ecc,semilla,&
+      rplanet,eme_core,erreh,emeiso_gas,eme_sca,indgas,tacc1,crit_gas,rmin,w1,&
+      taugas,time,emegas)
+    if(taucross >= dt)dt=taucross
+  endif
+ 
   !=======================================================================
   if (time <= taugas)then ! the trapping only works if there is still gas in the disk
    call migration_trapping(a,in,acm,a_gr,emepla,av_gr,mstar,&
@@ -451,7 +458,7 @@ do jj=1,tot_sed
 !(Ver Ida y Lin, The Astrophysical Journal, 604:388, 2004)
 subroutine migrar(a,rm,in,acm,rplanet,ind,a_gr,elestar, &
   emepla,det,av_gr,sigma_g,time,taugas,sigmag0,mstar,&
-  tot_sed,rmin,a_vis_irr,Mg_dot,dt,gama,rc)
+  tot_sed,rmin,a_vis_irr,Mg_dot,dt)
 implicit none
 include "parameters.par"  !declaration of the variables and constants
 
@@ -516,7 +523,7 @@ end
 !==================================================================
 !==================================================================
 subroutine migrarI(a,in,det,emepla,acm,elestar,&
-    mstar,sigmag0,time,tot_sed,rmin,a_vis_irr,Mg_dot,dt,gama,rc)
+    mstar,sigmag0,time,tot_sed,rmin,a_vis_irr,Mg_dot,dt)
 implicit none
 include "parameters.par"  !declaration of the variables and constants
 do j=1,tot_sed
@@ -610,6 +617,122 @@ include "parameters.par"  !declaration of the variables and constants
   enddo
 return
 end
+
+!==================================================================
+!==================================================================
+subroutine collisions(a,in,acm,emepla,mstar,n,taucross,ecc,semilla,&
+  rplanet,eme_core,erreh,emeiso_gas,eme_sca,indgas,tacc1,crit_gas,rmin,w1,&
+  taugas,time,emegas)
+implicit none
+!--------------------------------------------------------------------
+include "parameters.par"  !declaration of the variables and constants
+!--------------------------------------------------------------------
+!Ida&Lin (2010)
+!--------------------------------------------------------------------
+do l=1,n
+  i=in(l)
+  im=in(l+1)
+  if(a(i) <= rmin/aucm)cycle !If they already reached the inner disk I don't take it into account
+  semilla=semilla*3
+  a1=a(im)*aucm       !cm
+  a2=a(i)*aucm        !cm
+  da=abs(a1-a2)       !separacion entre las orbitas cm
+  if(da <= 1.d-8)da=1.d-8  
+  a_med=(a1*a2)**0.5  !medium value of semimajor axis cm
+  omegak=(g*mstar/a_med**3.)**0.5
+  Tk=2.*pi/omegak
+  rH=((emepla(im)+emepla(i))/(3.*mstar))**(1./3.)*a_med
+  mu_mass=(emepla(im)+emepla(i))/(2.*mstar)
+  e0=0.5*(ecc(im)+ecc(i))*a_med/da
+  a_func=-2+e0-0.27*log10(mu_mass)
+  b_func=18.7+1.1*log10(mu_mass)-(16.8+1.2*log10(mu_mass))*e0
+  algo=a_func+b_func*log10(da/(2.3*rH))
+  taucross_pair(i)=Tk*10.**(algo)/yearsec  !yr
+  if(taucross_pair(i) > 1.e30) taucross_pair(i) = 1.e30
+enddo
+tau_fast=taucross_pair(in(1))
+index=1
+do l=2,n
+  i=in(l)
+  if(tau_fast > taucross_pair(i))then
+    tau_fast=taucross_pair(i)
+    index=l
+  endif
+enddo   
+i=in(index)
+im=in(index+1)
+a1=a(im)*aucm       !cm
+a2=a(i)*aucm        !cm
+a_med=(a1*a2)**0.5
+w_1=w1(im)          !water percentage
+w_2=w1(i)
+ecc_both= 0.28*((emepla(i)+emepla(im))/emet)**(1./3.)*((a(im)*a(i))**0.5)**0.5
+ecc(i)= emepla(im)/(emepla(i)+emepla(im)) * ecc_both
+ecc(im)= emepla(i)/(emepla(i)+emepla(im)) * ecc_both
+if(a1 < a2)then
+  a1=(1.-ecc(im))*a(im)*aucm
+  a2=(1.+ecc(i))*a(i)*aucm
+else
+  a1=(1.+ecc(im))*a(im)*aucm
+  a2=(1.-ecc(i))*a(i)*aucm
+endif
+if(tau_fast < (tfin-time))then         !condition for collision
+  omega_peri_1=dble(ran(semilla))*(2.d0*pi) !AU
+  omega_peri_2=pi+omega_peri_1
+  arg=(emepla(i)*ecc(i)*sin(omega_peri_1)+emepla(im)*ecc(im)*sin(omega_peri_2))/&
+    (emepla(i)*ecc(i)*cos(omega_peri_1)+emepla(im)*ecc(im)*cos(omega_peri_2)) 
+  do kk=1,30 !this is because in atan(x), x must be between -pi/2 and pi/2 for fortran
+    if(arg >= ((2*kk-1)*pi/2.) .and. arg < ((2*(kk+1)-1)*pi/2.))then
+      arg=arg-pi*kk
+    elseif(arg < -((2*kk-1)*pi/2.) .and. arg >= -((2*(kk+1)-1)*pi/2.))then
+      arg=arg+pi*kk
+    endif
+  enddo
+  omega_peri_col=atan(arg)
+  e_ij=abs((emepla(i)*ecc(i)*cos(omega_peri_1)+emepla(i-1)*ecc(i-1)*cos(omega_peri_2))/&
+      (cos(omega_peri_col)*(emepla(i)+emepla(i-1))))
+    ecc(i)=e_ij
+    acm(i)=(emepla(i)+emepla(im))/(emepla(i)/a2+emepla(im)/a1)    !new a in cm
+    a(i)=acm(i)/aucm     
+    emepla_1=emepla(i)
+    emegas_1=emegas(i)              
+    rplanet_1=rplanet(i)
+    emepla(i)=emepla_1+emepla(im)
+    emegas(i)=emegas_1+emegas(im)
+    rplanet(i)=rplanet_1*(emepla(i)/emepla_1)**0.333333
+    eme_core(i)=emepla(i)
+    erreh(i)=a(i)*(emepla(i)/(3.d0*mstar))**0.33333333            !radio de hill del embryo en au
+    w1(i)= (emepla_1*w_2+emepla(im)*w_1)/emepla(i)
+!   ====================================================================
+  do k=index+1,n
+      j=in(k)
+      jm1=in(k+1)
+      emepla(j)=emepla(jm1)
+      a(j)=a(jm1)
+      acm(j)=acm(jm1)
+      ecc(j)=ecc(jm1)
+      erreh(j)=erreh(jm1)
+      w1(j)=w1(jm1)
+      emeiso_gas(j)=emeiso_gas(jm1)
+      eme_sca(j)=eme_sca(jm1)
+      eme_core(j)=eme_core(jm1)
+      emegas(j)=emegas(jm1)
+      rplanet(j)=rplanet(jm1)
+      indgas(j)=indgas(jm1)
+      tacc1(j)=tacc1(jm1)
+      crit_gas(j)=crit_gas(jm1)
+      in(k)=in(k+1)
+  enddo
+  n=n-1
+endif  
+do l=i,n
+  i=in(l)
+  omegak_cal=(g*mstar/a(i)**3.)**0.5
+  Tk_cal=2.*pi/omegak_cal/yearsec
+  if(taucross <= (10**5.5*Tk_cal))taucross=(10**5.5*Tk_cal)
+enddo
+return
+end        
 
 
 !==================================================================
