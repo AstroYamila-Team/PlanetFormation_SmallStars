@@ -384,8 +384,8 @@ do ii=1, nsistems
   if(time < tfin)goto 200
   do k=1,tot_sed
     i=in(k)   
-    write(330,'(15(e15.4,1x))')a(i),emepla(i)/emet,emegas(i),m_iso(i)/emet, &
-        alfa,taugas,md,mstar/emesol,rc,a_ini(i),w1(i)*100.,ecc(i),rmin/aucm,a_vis_irr,rice
+    write(330,'(9(e15.4,1x))')a(i),emepla(i)/emet,emegas(i),&
+        md,mstar/emesol,a_ini(i),rmin/aucm,a_vis_irr,rice
   enddo
   call flush(20)
 enddo
