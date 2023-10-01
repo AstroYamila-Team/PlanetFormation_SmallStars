@@ -4,10 +4,10 @@ Code and files published in Stefansson et al. 2023. Code developed in Miguel et 
 
 # Installation
 To compile the code you can use any standad Fortran compiler. You can compile and run the code with the following commands:
-´´´
+```
 gfortran -o formation Formation_Small_Stars-2020.f90
 ./formation
-´´´
+```
 
 To obtain the results published in Stefansson et al. 2023, change the mass of the star and the disk mass according to the conditions described in the paper for each of the cases explored. 
 The parameters for the distribution of mass of the disk can also change. 
